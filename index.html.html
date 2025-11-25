@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tráfego Orgânico Emagrecentro — Instagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#071127;
+      --panel:#081427;
+      --muted:#8ea3b2;
+      --accent:#06b6d4;
+      --card-shadow: 0 6px 24px rgba(2,6,23,0.8);
+      --text:#e6eef3;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:var(--text);background:linear-gradient(180deg,#021025 0%, #071127 100%);-webkit-font-smoothing:antialiased}
+    .wrap{max-width:1200px;margin:18px auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    h1{font-size:18px;margin:0;}
+    .controls{display:flex;gap:8px;align-items:center}
+    .card-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+    .card{background:var(--panel);padding:14px;border-radius:10px;box-shadow:var(--card-shadow)}
+    .kpi{font-size:20px;font-weight:700}
+    .kpi-sub{font-size:12px;color:var(--muted);margin-top:6px}
+    .charts{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    .chart-card{background:var(--panel);padding:12px;border-radius:10px;box-shadow:var(--card-shadow)}
+    .small-grid{display:grid;grid-template-rows:repeat(3,1fr);gap:12px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03)}
+    th{color:var(--muted);font-weight:600}
+    footer{margin-top:12px;color:var(--muted);font-size:13px}
+    input,select{background:#071827;border:1px solid #123242;color:var(--text);padding:6px;border-radius:6px}
+    .top-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .loading{color:var(--muted);font-size:13px}
+    @media(max-width:1000px){ .card-row{grid-template-columns:repeat(2,1fr)} .charts{grid-template-columns:1fr} }
+    @media(max-width:640px){ .card-row{grid-template-columns:1fr} header{flex-direction:column;align-items:flex-start} h1{font-size:16px} .controls{width:100%;justify-content:space-between} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Tráfego Orgânico Emagrecentro — Instagram</h1>
+        <div style="color:var(--muted);font-size:13px">Conectada ao Google Sheets (CSV público). Atualiza ao abrir e com intervalo configurável.</div>
+      </div>
+      <div class="controls">
+        <div class="top-filters">
+          <label style="color:var(--muted);font-size:13px">Unidade:
+            <select id="filterUnidade"><option value="">Todas</option></select>
+          </label>
+          <label style="color:var(--muted);font-size:13px">Periodo:
+            <input id="fromDate" type="date" />
+            <input id="toDate" type="date" />
+          </label>
+          <label style="color:var(--muted);font-size:13px">Auto-refresh:
+            <select id="refreshInterval">
+              <option value="0">Desativado</option>
+              <option value="15">15s</option>
+              <option value="30">30s</option>
+              <option value="60" selected>60s</option>
+              <option value="300">5min</option>
+            </select>
+          </label>
+          <button id="refreshNow" style="background:var(--accent);color:#012; border:none;padding:8px;border-radius:8px">Atualizar</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="card-row" id="kpiRow">
+      <div class="card">
+        <div class="kpi" id="kpiDirects">—</div>
+        <div class="kpi-sub">Direct Enviado?</div>
+      </div>
+      <div class="card">
+        <div class="kpi" id="kpiRespostas">—</div>
+        <div class="kpi-sub">Respondeu?</div>
+      </div>
+      <div class="card">
+        <div class="kpi" id="kpiAgendamentos">—</div>
+        <div class="kpi-sub">Agendou?</div>
+      </div>
+      <div class="card">
+        <div class="kpi" id="kpiVendas">—</div>
+        <div class="kpi-sub">Comprou?</div>
+      </div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card">
+        <canvas id="timeSeries" ></canvas>
+      </div>
+      <div class="small-grid">
+        <div class="chart-card">
+          <canvas id="stackedBar"></canvas>
+        </div>
+        <div class="chart-card">
+          <canvas id="funnel"></canvas>
+        </div>
+        <div class="card">
+          <div style="font-weight:700">Previsão (Próximos 7 dias)</div>
+          <div id="forecastList" style="color:var(--muted);margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div class="card card-row" style="grid-template-columns:1fr">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:700">Tabela (últimos 200 registros)</div>
+        <div class="loading" id="lastUpdate">—</div>
+      </div>
+      <div style="overflow:auto;margin-top:8px">
+        <table id="rawTable">
+          <thead><tr><th>Data</th><th>Unidade</th><th>Directs</th><th>Respostas</th><th>Agendou</th><th>Compareceu</th><th>Comprou</th></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer>
+      <div style="color:var(--muted)">Observação: para que a dashboard carregue, publique sua planilha como CSV (Arquivo → Publicar na Web → Aba Leads → CSV) e permita acesso via link.</div>
+    </footer>
+  </div>
+
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSjDEbxS9ieNObM4lVDYcZ_E9tzuDvf92I8e0VEJCrkByw2r9gHUiUsWWGkE65J97dkiO0Ind8GEoju/pub?gid=1531464708&single=true&output=csv";
+
+function safeSplitRow(row) {
+  const re = /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
+  return row.split(re).map(c => c.replace(/^"|"$/g,'').trim());
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l=>l.trim()!=="");
+  if(lines.length===0) return [];
+  const headers = safeSplitRow(lines[0]);
+  const rows = [];
+  for(let i=1;i<lines.length;i++) {
+    const cols = safeSplitRow(lines[i]);
+    const obj = {};
+    for(let j=0;j<headers.length;j++) {
+      obj[headers[j]] = cols[j] !== undefined ? cols[j] : "";
+    }
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseDate(s) {
+  if(!s) return null;
+  s = s.trim();
+  const dmy = /^\d{2}\/\d{2}\/\d{4}$/;
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if(iso.test(s)) return s;
+  if(dmy.test(s)) {
+    const [dd,mm,yy]=s.split('/');
+    return `${yy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+  }
+  const dt = new Date(s);
+  if(!isNaN(dt)) return dt.toISOString().slice(0,10);
+  return null;
+}
+
+function toNumber(v) {
+  if(v===null||v===undefined||v==="") return 0;
+  const s = String(v).replace(/\./g,'').replace(',', '.').replace(/[^0-9\.\-]/g,'');
+  const n = parseFloat(s);
+  return isNaN(n)?0:n;
+}
+
+function aggregate(rows, unitFilter, fromDate, toDate) {
+  const map = new Map();
+  const units = new Set();
+  rows.forEach(r=>{
+    const dateRaw = r["Data"] || r["data"] || r["Date"];
+    const unit = (r["Unidade"]||"").trim();
+    if(unit) units.add(unit);
+    const date = parseDate(dateRaw);
+    if(!date) return;
+    if(unitFilter && unitFilter !== "" && unit !== unitFilter) return;
+    if(fromDate && date < fromDate) return;
+    if(toDate && date > toDate) return;
+    const key = date;
+    if(!map.has(key)) map.set(key, {Directs:0,Respostas:0,Agendamentos:0,Compareceu:0,Comprou:0});
+    const obj = map.get(key);
+    obj.Directs += toNumber(r["Direct Enviado?"] ?? r["Directs"] ?? r["Direct Enviado"]);
+    obj.Respostas += toNumber(r["Respondeu?"] ?? r["Respostas"] ?? r["Respondeu"]);
+    obj.Agendamentos += toNumber(r["Agendou?"] ?? r["Agendamentos"] ?? r["Agendou"]);
+    obj.Compareceu += toNumber(r["Compareceu?"] ?? r["Comparecimentos"] ?? r["Compareceu"]);
+    obj.Comprou += toNumber(r["Comprou?"] ?? r["Vendas"] ?? r["Comprou"]);
+  });
+  const sorted = Array.from(map.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,vals])=>({date,...vals}));
+  return {data:sorted, units:Array.from(units).filter(u=>u!=="").sort()};
+}
+
+function linearForecast(arr, days=7) {
+  const n = arr.length;
+  if(n===0) return Array(days).fill(0);
+  const y = arr.slice();
+  const xbar = (n-1)/2;
+  const ybar = y.reduce((s,v)=>s+v,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++) {
+    num += (i-xbar)*(y[i]-ybar);
+    den += (i-xbar)*(i-xbar);
+  }
+  const slope = den===0?0:num/den;
+  const intercept = ybar - slope*xbar;
+  const res = [];
+  for(let k=1;k<=days;k++) {
+    const xi = n-1 + k;
+    res.push(Math.max(0, Math.round(intercept + slope*xi)));
+  }
+  return res;
+}
+
+let charts = {time:null, stacked:null, funnel:null};
+let autoTimer = null;
+
+async function fetchAndRender() {
+  try {
+    const url = CSV_URL + (CSV_URL.includes('?') ? '&' : '?') + '_ts=' + Date.now();
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text();
+    const rows = parseCSV(text);
+    const unitSel = document.getElementById('filterUnidade').value;
+    const from = document.getElementById('fromDate').value || null;
+    const to = document.getElementById('toDate').value || null;
+    const agg = aggregate(rows, unitSel, from, to);
+    const data = agg.data;
+    const sel = document.getElementById('filterUnidade');
+    const existing = Array.from(sel.options).map(o=>o.value);
+    agg.units.forEach(u=>{ if(!existing.includes(u)) sel.appendChild(new Option(u,u)); });
+    const totals = data.reduce((acc,row)=>({Directs:acc.Directs+row.Directs,Respostas:acc.Respostas+row.Respostas,Agendamentos:acc.Agendamentos+row.Agendamentos,Compareceu:acc.Compareceu+row.Compareceu,Comprou:acc.Comprou}),{Directs:0,Respostas:0,Agendamentos:0,Compareceu:0,Comprou:0});
+    document.getElementById('kpiDirects').innerText = totals.Directs;
+    document.getElementById('kpiRespostas').innerText = totals.Respostas;
+    document.getElementById('kpiAgendamentos').innerText = totals.Agendamentos;
+    document.getElementById('kpiVendas').innerText = totals.Comprou;
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    rows.slice(-200).reverse().forEach(r=>{
+      const d = parseDate(r["Data"]);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${d||r["Data"]||''}</td><td>${r["Unidade"]||''}</td><td style="text-align:right">${r["Direct Enviado?"]||r["Directs"]||''}</td><td style="text-align:right">${r["Respondeu?"]||r["Respostas"]||''}</td><td style="text-align:right">${r["Agendou?"]||r["Agendamentos"]||''}</td><td style="text-align:right">${r["Compareceu?"]||r["Comparecimentos"]||''}</td><td style="text-align:right">${r["Comprou?"]||r["Vendas"]||''}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('lastUpdate').innerText = 'Última atualização: ' + new Date().toLocaleString();
+    const labels = data.map(d=>d.date);
+    const directs = data.map(d=>d.Directs);
+    const respostas = data.map(d=>d.Respostas);
+    const agend = data.map(d=>d.Agendamentos);
+    const comp = data.map(d=>d.Compareceu);
+    const vend = data.map(d=>d.Comprou);
+    const forecasts = linearForecast(vend,7);
+    const futureLabels = forecasts.map((_,i)=>{
+      const last = labels.length? new Date(labels[labels.length-1]) : new Date();
+      last.setDate(last.getDate() + i + 1);
+      return last.toISOString().slice(0,10);
+    });
+    const timeLabels = labels.concat(futureLabels);
+    const vendasExt = vend.concat(forecasts);
+    if(charts.time) charts.time.destroy();
+    const ctx = document.getElementById('timeSeries').getContext('2d');
+    charts.time = new Chart(ctx, {
+      type:'line',
+      data: {
+        labels: timeLabels,
+        datasets: [
+          { label:'Directs', data: directs.concat(Array(futureLabels.length).fill(null)), borderColor:'#06b6d4', backgroundColor:'rgba(6,182,212,0.08)', tension:0.2 },
+          { label:'Respostas', data: respostas.concat(Array(futureLabels.length).fill(null)), borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.06)', tension:0.2 },
+          { label:'Agendamentos', data: agend.concat(Array(futureLabels.length).fill(null)), borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.06)', tension:0.2 },
+          { label:'Compareceu', data: comp.concat(Array(futureLabels.length).fill(null)), borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,0.06)', tension:0.2 },
+          { label:'Vendas (real+est.)', data: vendasExt, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.06)', tension:0.2 }
+        ]
+      },
+      options: {
+        plugins: {legend:{labels:{color: 'white'}}},
+        scales: { x:{ticks:{color:'#cfe6ee'}}, y:{ticks:{color:'#cfe6ee'}}}
+      }
+    });
+    const last10 = labels.slice(-10);
+    const sDirects = directs.slice(-10);
+    const sResp = respostas.slice(-10);
+    const sAg = agend.slice(-10);
+    if(charts.stacked) charts.stacked.destroy();
+    const ctx2 = document.getElementById('stackedBar').getContext('2d');
+    charts.stacked = new Chart(ctx2, {
+      type:'bar',
+      data: {
+        labels: last10,
+        datasets: [
+          { label:'Directs', data:sDirects, backgroundColor:'#06b6d4' },
+          { label:'Respostas', data:sResp, backgroundColor:'#10b981' },
+          { label:'Agendamentos', data:sAg, backgroundColor:'#f59e0b' }
+        ]
+      },
+      options: {
+        plugins:{legend:{labels:{color:'white'}}},
+        scales:{x:{ticks:{color:'#cfe6ee'}}, y:{ticks:{color:'#cfe6ee'}}}
+      }
+    });
+    if(charts.funnel) charts.funnel.destroy();
+    const ctx3 = document.getElementById('funnel').getContext('2d');
+    const totals = totals || {Directs:0,Respostas:0,Agendamentos:0,Compareceu:0,Comprou:0};
+    charts.funnel = new Chart(ctx3, {
+      type:'bar',
+      data: {
+        labels:['Directs','Respostas','Agendamentos','Compareceu','Comprou'],
+        datasets:[{data:[totals.Directs, totals.Respostas, totals.Agendamentos, totals.Compareceu, totals.Comprou], backgroundColor:['#06b6d4','#10b981','#f59e0b','#7c3aed','#ef4444']}]      },
+      options: {
+        indexAxis:'y',
+        plugins:{legend:{display:false}},
+        scales:{x:{ticks:{color:'#cfe6ee'}}, y:{ticks:{color:'#cfe6ee'}}}
+      }
+    });
+    const fl = document.getElementById('forecastList');
+    fl.innerHTML = '';
+    forecasts.forEach((v,i)=>{
+      const div = document.createElement('div');
+      const lab = futureLabels[i];
+      div.style.marginBottom='6px';
+      div.innerHTML = `<strong style="color:var(--accent)">${lab}</strong>: ${v} vendas (estim.)`;
+      fl.appendChild(div);
+    });
+  } catch(err) {
+    console.error(err);
+    document.getElementById('lastUpdate').innerText = 'Erro ao carregar: ' + err.message;
+  }
+}
+
+function startAutoRefresh() {
+  if(autoTimer) clearInterval(autoTimer);
+  const sec = Number(document.getElementById('refreshInterval').value);
+  if(sec>0) autoTimer = setInterval(fetchAndRender, sec*1000);
+}
+
+document.getElementById('refreshNow').addEventListener('click', fetchAndRender);
+document.getElementById('filterUnidade').addEventListener('change', fetchAndRender);
+document.getElementById('fromDate').addEventListener('change', fetchAndRender);
+document.getElementById('toDate').addEventListener('change', fetchAndRender);
+document.getElementById('refreshInterval').addEventListener('change', startAutoRefresh);
+
+fetchAndRender();
+startAutoRefresh();
+
+</script>
+</body>
+</html>
